@@ -9,8 +9,16 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
+import java.util.logging.Handler;
 
 public class AudioClient implements Runnable{
+
+    public SharedData data;
+
+    public AudioClient(SharedData data) {
+        this.data = data;
+    }
+
     public DatagramSocket create_socket() throws Exception {
         DatagramSocket udpSocket = null;
         int MAX_TRIES = 10, cnt = 0;
@@ -19,22 +27,23 @@ public class AudioClient implements Runnable{
                 udpSocket = new DatagramSocket(null);
                 udpSocket.setReuseAddress(true);
                 udpSocket.setBroadcast(true);
+                udpSocket.setSoTimeout(1000);
                 InetSocketAddress address = new InetSocketAddress("0.0.0.0", 4051);
                 udpSocket.bind(address);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             try {
-                Thread.sleep(100);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            Log.d("Connection", "Trying to create socket");
+            Log.d("PCstream", "Trying to create socket");
             cnt += 1;
         }
         if (udpSocket == null)
             throw new Exception("Error creating socket");
-        Log.d("Connection", "Socket created successfully");
+        Log.d("PCstream", "Socket created successfully");
         return udpSocket;
     }
 
@@ -67,11 +76,17 @@ public class AudioClient implements Runnable{
             try {
                 DatagramPacket packet = new DatagramPacket(message, message.length);
                 udpSocket.receive(packet);
+                data.server_ip = packet.getAddress().toString();
+//                Log.d("PCstream", connected_ip);
                 numRead = packet.getLength();
+//                Log.d("PCstream", "recebendo");
                 player.write(message, 0, numRead);
                 cnt += 1;
             } catch (Exception e) {
+                Log.d("PCstream", "Something bad happen");
+                data.server_ip = "";
                 try {
+                    udpSocket.close();
                     udpSocket = create_socket();
                 } catch (Exception ee) {
                     ee.printStackTrace();
