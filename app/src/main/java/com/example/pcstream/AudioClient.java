@@ -27,7 +27,7 @@ public class AudioClient implements Runnable{
                 udpSocket = new DatagramSocket(null);
                 udpSocket.setReuseAddress(true);
                 udpSocket.setBroadcast(true);
-                udpSocket.setSoTimeout(1000);
+                udpSocket.setSoTimeout(5000);
                 InetSocketAddress address = new InetSocketAddress("0.0.0.0", 4051);
                 udpSocket.bind(address);
             } catch (IOException e) {
@@ -49,6 +49,7 @@ public class AudioClient implements Runnable{
 
     @Override
     public void run() {
+        int chunk = 2048;
         AudioTrack player = new AudioTrack.Builder()
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -59,7 +60,7 @@ public class AudioClient implements Runnable{
                         .setSampleRate(44100)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                         .build())
-                .setBufferSizeInBytes(2048)
+                .setBufferSizeInBytes(chunk)
                 .build();
         player.play();
 
@@ -71,10 +72,11 @@ public class AudioClient implements Runnable{
         }
 
         int cnt = 0, numRead;
-        byte[] message = new byte[2048];
+        byte[] message = new byte[chunk];
+        DatagramPacket packet = null;
+        packet = new DatagramPacket(message, message.length);
         while (true) {
             try {
-                DatagramPacket packet = new DatagramPacket(message, message.length);
                 udpSocket.receive(packet);
                 data.server_ip = packet.getAddress().toString();
 //                Log.d("PCstream", connected_ip);
@@ -84,6 +86,7 @@ public class AudioClient implements Runnable{
                 cnt += 1;
             } catch (Exception e) {
                 Log.d("PCstream", "Something bad happen");
+                e.printStackTrace();
                 data.server_ip = "";
                 try {
                     udpSocket.close();

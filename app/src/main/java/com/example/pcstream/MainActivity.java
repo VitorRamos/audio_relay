@@ -3,15 +3,11 @@ package com.example.pcstream;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
-import android.content.Intent;
 import android.net.DhcpInfo;
 import android.net.wifi.WifiManager;
-import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.StrictMode;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -61,7 +57,7 @@ class BrodcastAdress implements Runnable {
             byte[] sendData = messageStr.getBytes();
             DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, getBroadcastAddress(), 4052);
             socket.send(sendPacket);
-            System.out.println(getClass().getName() + "Broadcast packet sent to: " + getBroadcastAddress().getHostAddress());
+            Log.d("PCstream", getClass().getName() + "Broadcast packet sent to: " + getBroadcastAddress().getHostAddress());
         } catch (IOException e) {
             Log.e("PCstream", "IOException: " + e.getMessage());
         }

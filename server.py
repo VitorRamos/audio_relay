@@ -3,6 +3,7 @@ import socket
 import pyaudio
 import time
 
+
 def wait_for_server_adress(port: str) -> str:
     print("Waiting for server adress")
     bcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -10,7 +11,7 @@ def wait_for_server_adress(port: str) -> str:
     while 1:
         data = bcast_sock.recvfrom(12)
         if data:
-            print("Server adress recvied", data[1][0])
+            print("Server adress recvied", data)
             server_adress = data[1][0]
             break
     return server_adress
@@ -33,14 +34,14 @@ def send_audio(stream: pyaudio.PyAudio, chunk: int, rate: int, adress: Tuple[str
     ti = time.time()
     while 1:
         try:
-            data = stream.read(CHUNK)
+            data = stream.read(chunk)
             if data == b"\x00"*len(data):
                 continue
             sock.sendto(data, adress)
             ep_time = time.time()-ti
             if ep_time < chunk/rate:
-                time.sleep(chunk/rate*0.9-ep_time)
-            print(time.time()-ti)
+                time.sleep((chunk)/rate*0.9-ep_time)
+            print(f"Delta time {time.time()-ti:.2e}")
             ti = time.time()
         except KeyboardInterrupt:
             break
