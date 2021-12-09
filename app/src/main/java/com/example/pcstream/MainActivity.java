@@ -70,6 +70,8 @@ class BrodcastAdress implements Runnable {
 }
 
 public class MainActivity extends AppCompatActivity {
+    public Intent audio_service;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -78,7 +80,7 @@ public class MainActivity extends AppCompatActivity {
         SharedData data = new SharedData();
         //AudioClient x = new AudioClient(data);
         //Thread client = new Thread(x);
-        Intent audio_service = new Intent(this, AudioService.class);
+        audio_service = new Intent(this, AudioService.class);
         //audio_service.putExtra("data", data);
         startService(audio_service);
 
@@ -104,5 +106,11 @@ public class MainActivity extends AppCompatActivity {
             BrodcastAdress badress = new BrodcastAdress(v.getContext());
             new Thread(badress).start();
         });
+    }
+
+    public void onDestroy() {
+        super.onDestroy();
+        stopService(audio_service);
+        Log.d("PCStream", "Stopping audio service");
     }
 }
