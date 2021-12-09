@@ -61,6 +61,7 @@ public class AudioClient implements Runnable{
                         .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                         .build())
                 .setBufferSizeInBytes(chunk)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build();
         player.play();
 
@@ -72,6 +73,7 @@ public class AudioClient implements Runnable{
         }
 
         int cnt = 0, numRead;
+        int sum = 0;
         byte[] message = new byte[chunk];
         DatagramPacket packet = null;
         packet = new DatagramPacket(message, message.length);
@@ -82,7 +84,10 @@ public class AudioClient implements Runnable{
 //                Log.d("PCstream", connected_ip);
                 numRead = packet.getLength();
 //                Log.d("PCstream", "recebendo");
-                player.write(message, 0, numRead);
+                sum = 0;
+                for (byte b : message) sum |= b;
+                if(sum != 0)
+                    player.write(message, 0, numRead);
                 cnt += 1;
             } catch (Exception e) {
                 Log.d("PCstream", "Something bad happen");
