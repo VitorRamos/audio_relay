@@ -3,6 +3,7 @@ package com.example.pcstream;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
+import android.content.Intent;
 import android.net.DhcpInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
@@ -75,9 +76,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         SharedData data = new SharedData();
-        AudioClient x = new AudioClient(data);
-        Thread client = new Thread(x);
-        client.start();
+        //AudioClient x = new AudioClient(data);
+        //Thread client = new Thread(x);
+        Intent audio_service = new Intent(this, AudioService.class);
+        //audio_service.putExtra("data", data);
+        startService(audio_service);
 
         new Thread(() -> {
             while (true) {
