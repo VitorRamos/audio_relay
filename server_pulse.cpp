@@ -36,7 +36,7 @@ int main()
     
     battr.maxlength = 65536; // max buffer len
     battr.tlength = 2048; // target buffer len
-    battr.prebuf = 2048; // The server does not start with playback before at least prebuf
+    battr.prebuf = 512; // The server does not start with playback before at least prebuf
     battr.minreq = 512; // The server does not request less than minreq bytes
     battr.fragsize = 2048; // The server sends data in blocks of fragsize bytes size
     
@@ -47,7 +47,7 @@ int main()
                     "System sound",            // Description of our stream.
                     &ss,                // Our sample format.
                     NULL,               // Use default channel map
-                    NULL,               // Use default buffering attributes.
+                    &battr,               // Use default buffering attributes.
                     NULL               // Ignore error code.
                     );
     int error;
