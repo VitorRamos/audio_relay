@@ -14,10 +14,13 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 
 public class AudioService extends Service {
+    public SharedData data;
     public DatagramSocket udpSocket = null;
-    public AudioService() {
 
-    }
+//    public AudioService(SharedData data) {
+//        this.data = data;
+//    }
+
     public DatagramSocket create_socket() throws Exception {
         DatagramSocket udpSocket = null;
         int MAX_TRIES = 10, cnt = 0;
@@ -26,28 +29,29 @@ public class AudioService extends Service {
                 udpSocket = new DatagramSocket(null);
                 udpSocket.setReuseAddress(true);
                 udpSocket.setBroadcast(true);
-                udpSocket.setSoTimeout(1000);
+                udpSocket.setSoTimeout(5000);
                 InetSocketAddress address = new InetSocketAddress("0.0.0.0", 4051);
                 udpSocket.bind(address);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             try {
-                Thread.sleep(100);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            Log.d("COCA", "Trying to create socket");
+            Log.d("PCstream", "Trying to create socket");
             cnt += 1;
         }
         if (udpSocket == null)
             throw new Exception("Error creating socket");
-        Log.d("COCA", "Socket created successfully");
+        Log.d("PCstream", "Socket created successfully");
         return udpSocket;
     }
 
     @Override
     public void onCreate(){
+        int chunk = 2048;
         AudioTrack player = new AudioTrack.Builder()
                 .setAudioAttributes(new AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -58,9 +62,11 @@ public class AudioService extends Service {
                         .setSampleRate(44100)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                         .build())
-                .setBufferSizeInBytes(2048)
+                .setBufferSizeInBytes(chunk)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build();
         player.play();
+
         try {
             udpSocket = create_socket();
         } catch (Exception e) {
@@ -69,18 +75,26 @@ public class AudioService extends Service {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                int cnt = 0, numRead;
-                byte[] message = new byte[2048];
+                DatagramPacket packet = null;
+                byte[] message = new byte[chunk];
+                packet = new DatagramPacket(message, message.length);
+                int cnt = 0, sum = 0, numRead;
                 while (true) {
                     try {
-                        DatagramPacket packet = new DatagramPacket(message, message.length);
                         udpSocket.receive(packet);
+                        //data.server_ip = packet.getAddress().toString();
+//                Log.d("PCstream", connected_ip);
                         numRead = packet.getLength();
-//                Log.d("COCA", "recebendo");
-                        player.write(message, 0, numRead);
+//                Log.d("PCstream", "recebendo");
+                        sum = 0;
+                        for (byte b : message) sum |= b;
+                        if(sum != 0)
+                            player.write(message, 0, numRead);
                         cnt += 1;
                     } catch (Exception e) {
-                        Log.d("COCA", "Something bad happen");
+                        Log.d("PCstream", "Something bad happen");
+                        e.printStackTrace();
+                        //data.server_ip = "";
                         try {
                             udpSocket.close();
                             udpSocket = create_socket();
