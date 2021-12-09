@@ -1,10 +1,16 @@
 package com.example.pcstream;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioTrack;
+import android.media.MediaMetadata;
+import android.media.session.MediaSession;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -66,6 +72,65 @@ public class AudioService extends Service {
                 .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build();
         player.play();
+
+        MediaSession ms = new MediaSession(getApplicationContext(), getPackageName());
+        ms.setActive(true);
+        ms.setMetadata(new MediaMetadata.Builder()
+                .putText(MediaMetadata.METADATA_KEY_TITLE,"PCStream")
+                .build());
+        ms.setCallback(new MediaSession.Callback() {
+            @Override
+            public void onPlay() {
+            }
+
+            @Override
+            public void onPause() {
+            }
+
+            @Override
+            public void onStop() {
+            }
+
+            @Override
+            public void onSkipToPrevious() {
+            }
+
+            @Override
+            public void onSkipToNext() {
+            }
+        });
+        String channelId = "pc_stream_playback";
+        NotificationChannel channel = new NotificationChannel(
+                channelId,
+                "Channel human readable title",
+                NotificationManager.IMPORTANCE_LOW);
+        Notification notification = new Notification.Builder(getApplicationContext(), channelId)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
+                    .setSmallIcon(R.drawable.ic_launcher_foreground)
+                    .setStyle(new Notification.MediaStyle()
+                            .setShowActionsInCompactView(1)
+                            .setMediaSession(ms.getSessionToken()))
+                    .setContentTitle("Track title")
+                    .setContentText("Artist - Album")
+                    .build();
+
+//        Notification notification2 = new NotificationCompat.Builder(getApplicationContext(), channelId)
+//                // Show controls on lock screen even when user hides sensitive content.
+//                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+//                // Add media control buttons that invoke intents in your media service
+////                .addAction(R.drawable.ic_prev, "Previous", prevPendingIntent) // #0
+////                .addAction(R.drawable.ic_pause, "Pause", pausePendingIntent)  // #1
+////                .addAction(R.drawable.ic_next, "Next", nextPendingIntent)     // #2
+//                // Apply the media style template
+//                .setSmallIcon(R.drawable.ic_launcher_foreground)
+//                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle())
+//                .setContentTitle("PCStream")
+//                .setContentText("active stream")
+//                //.setLargeIcon(albumArtBitmap)
+//                .build();
+        NotificationManager mNotificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        mNotificationManager.createNotificationChannel(channel);
+        mNotificationManager.notify(6, notification);
 
         try {
             udpSocket = create_socket();
