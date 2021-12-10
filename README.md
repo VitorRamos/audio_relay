@@ -1,8 +1,8 @@
-# Stream audio from the pc to the phone
+### Stream audio from the pc to the phone
 Ultra low latency audio relay
 
-# Build server
+### Build server
 make
 
-# Build client
+### Build client
 android studio...
