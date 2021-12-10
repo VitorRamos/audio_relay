@@ -29,13 +29,8 @@ public class AudioService extends Service {
     private final IBinder binder = new LocalBinder();
     public DatagramSocket udpSocket = null;
 
-//    public AudioService(SharedData data) {
-//        this.data = data;
-//    }
-
     public class LocalBinder extends Binder {
         AudioService getService() {
-            // Return this instance of LocalService so clients can call public methods
             return AudioService.this;
         }
     }
@@ -161,6 +156,7 @@ public class AudioService extends Service {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                String prev_ip = "";
                 DatagramPacket packet = null;
                 byte[] message = new byte[chunk];
                 packet = new DatagramPacket(message, message.length);
@@ -168,7 +164,9 @@ public class AudioService extends Service {
                 while (true) {
                     try {
                         udpSocket.receive(packet);
-                        serverip_observer.onNext(packet.getAddress().toString());
+                        if(packet.getAddress().toString() != prev_ip)
+                            serverip_observer.onNext(prev_ip);
+                        prev_ip = packet.getAddress().toString();
 //                Log.d("PCstream", connected_ip);
                         numRead = packet.getLength();
 //                Log.d("PCstream", "recebendo");
@@ -180,7 +178,7 @@ public class AudioService extends Service {
                     } catch (Exception e) {
                         Log.d("PCstream", "Something bad happen");
                         e.printStackTrace();
-                        //data.server_ip = "";
+                        //serverip_observer.onNext("disconnected");
                         try {
                             udpSocket.close();
                             udpSocket = create_socket();
