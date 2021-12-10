@@ -1,0 +1,13 @@
+[Unit]
+Description=Startup configuration
+After=graphical.target network.target sound.target
+Requires=pulseaudio.socket
+
+[Service]
+Type=idle
+Restart=on-failure
+ExecStart=/usr/bin/server_pulse
+
+[Install]
+Also=pulseaudio.socket
+WantedBy=multi-user.target
