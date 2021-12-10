@@ -96,6 +96,7 @@ public class MainActivity extends AppCompatActivity {
                 audio_conn_bound = false;
             }
         };
+        startService(audio_intent);
         bindService(audio_intent, audio_conn, Context.BIND_AUTO_CREATE);
 
         BrodcastAdress badress = new BrodcastAdress(getApplicationContext());
