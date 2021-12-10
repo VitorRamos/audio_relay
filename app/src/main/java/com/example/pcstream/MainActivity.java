@@ -1,34 +1,28 @@
 package com.example.pcstream;
 
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.net.DhcpInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.StrictMode;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
+
+import androidx.appcompat.app.AppCompatActivity;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
+import io.reactivex.rxjava3.disposables.Disposable;
 
-class SharedData {
-    public String server_ip = "";
-    public String prev_server_ip = "";
-    public boolean update(){
-        if(prev_server_ip != server_ip){
-            prev_server_ip = server_ip;
-            return true;
-        }
-        return false;
-    }
-}
 
 class BrodcastAdress implements Runnable {
     public Context context;
@@ -70,47 +64,54 @@ class BrodcastAdress implements Runnable {
 }
 
 public class MainActivity extends AppCompatActivity {
-    public Intent audio_service;
+
+    private Intent audio_intent;
+    private AudioService audio_service;
+    private ServiceConnection audio_conn;
+    private boolean audio_conn_bound = false;
+    private TextView serverip_textview;
+    private Button brodcast_button;
+    private Disposable serverip_disposable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        SharedData data = new SharedData();
-        //AudioClient x = new AudioClient(data);
-        //Thread client = new Thread(x);
-        audio_service = new Intent(this, AudioService.class);
-        //audio_service.putExtra("data", data);
-        startService(audio_service);
-
-        new Thread(() -> {
-            while (true) {
-                try {
-                    if(data.update()){
-                        runOnUiThread(() -> {
-                            TextView sip = findViewById(R.id.server_ip);
-                            sip.setText(data.server_ip);
-                        });
-                    }
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+        serverip_textview = findViewById(R.id.server_ip);
+        audio_intent = new Intent(this, AudioService.class);
+        audio_conn = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName className, IBinder service) {
+                AudioService.LocalBinder binder = (AudioService.LocalBinder) service;
+                audio_service = binder.getService();
+                audio_conn_bound = true;
+                serverip_disposable = audio_service.get_serverip()
+                                    .observeOn(AndroidSchedulers.mainThread())
+                                    .subscribe(serverip -> serverip_textview.setText(serverip));
             }
-        }).start();
-        //startService(new Intent(getBaseContext(), AudioService.class));
 
-        Button bntt_brodcast = findViewById(R.id.bntt_brodcast);
-        bntt_brodcast.setOnClickListener(v -> {
-            BrodcastAdress badress = new BrodcastAdress(v.getContext());
-            new Thread(badress).start();
+            @Override
+            public void onServiceDisconnected(ComponentName arg0) {
+                audio_conn_bound = false;
+            }
+        };
+        bindService(audio_intent, audio_conn, Context.BIND_AUTO_CREATE);
+
+        BrodcastAdress badress = new BrodcastAdress(getApplicationContext());
+        new Thread(badress).start();
+
+        brodcast_button = findViewById(R.id.bntt_brodcast);
+        brodcast_button.setOnClickListener(v -> {
+            BrodcastAdress badress_aux = new BrodcastAdress(v.getContext());
+            new Thread(badress_aux).start();
         });
     }
 
     public void onDestroy() {
         super.onDestroy();
-        stopService(audio_service);
+        unbindService(audio_conn);
+        audio_conn_bound = false;
         Log.d("PCStream", "Stopping audio service");
     }
 }

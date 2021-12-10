@@ -1,5 +1,5 @@
 CXX = g++
-LIBS = -lpulse-simple -lpulse
+LIBS = -lpulse-simple -lpulse -lpthread
 
 server_pulse : server_pulse.cpp
 	$(CXX) $? $(LIBS) -o $@ 

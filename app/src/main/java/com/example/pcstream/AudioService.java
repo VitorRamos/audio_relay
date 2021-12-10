@@ -11,6 +11,7 @@ import android.media.AudioFormat;
 import android.media.AudioTrack;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
+import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -19,13 +20,33 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 
+import io.reactivex.rxjava3.core.ObservableEmitter;
+import io.reactivex.rxjava3.core.Observable;
+
 public class AudioService extends Service {
-    public SharedData data;
+    private Observable<String> serveip;
+    private ObservableEmitter<String> serverip_observer;
+    private final IBinder binder = new LocalBinder();
     public DatagramSocket udpSocket = null;
 
 //    public AudioService(SharedData data) {
 //        this.data = data;
 //    }
+
+    public class LocalBinder extends Binder {
+        AudioService getService() {
+            // Return this instance of LocalService so clients can call public methods
+            return AudioService.this;
+        }
+    }
+
+    public Observable<String> get_serverip(){
+        if(serveip == null) {
+            serveip = Observable.create(emitter -> serverip_observer = emitter);
+            serveip = serveip.share();
+        }
+        return serveip;
+    }
 
     public DatagramSocket create_socket() throws Exception {
         DatagramSocket udpSocket = null;
@@ -147,7 +168,7 @@ public class AudioService extends Service {
                 while (true) {
                     try {
                         udpSocket.receive(packet);
-                        //data.server_ip = packet.getAddress().toString();
+                        serverip_observer.onNext(packet.getAddress().toString());
 //                Log.d("PCstream", connected_ip);
                         numRead = packet.getLength();
 //                Log.d("PCstream", "recebendo");
@@ -174,7 +195,6 @@ public class AudioService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
-        // TODO: Return the communication channel to the service.
-        throw new UnsupportedOperationException("Not yet implemented");
+        return binder;
     }
 }
