@@ -5,6 +5,7 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <pulse/stream.h>
+#include <pulse/pulseaudio.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -43,6 +44,63 @@ string recv_server_addr()
     }
 }
 
+void state_cb(pa_context* context, void* raw) {
+    switch(pa_context_get_state(context))
+    {
+        case PA_CONTEXT_READY:
+            *((int*)raw) = 1;
+            break;
+        case PA_CONTEXT_FAILED:
+            *((int*)raw) = -1;
+            break;
+        case PA_CONTEXT_UNCONNECTED:
+        case PA_CONTEXT_AUTHORIZING:
+        case PA_CONTEXT_SETTING_NAME:
+        case PA_CONTEXT_CONNECTING:
+        case PA_CONTEXT_TERMINATED:
+            break;
+    }
+}
+
+void source_list_cb(pa_context* c, const pa_source_info *i, int eol, void *raw) {
+    if (eol != 0) {
+        return;
+    }
+    if(string(i->description).find("Monitor of Built-in") != string::npos){
+        *((string*)raw) = string(i->name);
+        // cout << i->index << " " << i->description << " " << i->name << endl;
+    }
+}
+
+string get_monitor_name(){
+    pa_mainloop* mainloop;
+    pa_mainloop_api* mainloop_api;
+    pa_context* context;
+    int retval, state = 0;
+    string name;
+
+    mainloop = pa_mainloop_new();
+    mainloop_api = pa_mainloop_get_api(mainloop);
+    context = pa_context_new(mainloop_api, "test");
+
+    pa_context_set_state_callback(context, &state_cb, &state);
+    if (pa_context_connect(context, NULL, PA_CONTEXT_NOFLAGS, NULL) < 0)
+        return "";
+    while (state <= 0) {
+        if (pa_mainloop_iterate(mainloop, 1, &retval) < 0)
+            return "";
+    }
+    if (state == -1)
+        return "";
+
+    pa_operation* op = pa_context_get_source_info_list(context, &source_list_cb, &name);
+    while (pa_operation_get_state(op) == PA_OPERATION_RUNNING) {
+        pa_mainloop_iterate(mainloop, 1, &retval);
+    }
+
+    return name;
+}
+
 int main()
 {
     thread reciver(recv_server_addr);
@@ -63,10 +121,14 @@ int main()
     battr.minreq = 512; // The server does not request less than minreq bytes
     battr.fragsize = 2048; // The server sends data in blocks of fragsize bytes size
     
+    string name = get_monitor_name();
+    if(name == ""){
+        name = "";
+    }
     s = pa_simple_new(NULL,               // Use the default server.
                     "pc relay",           // Our application's name.
                     PA_STREAM_RECORD,
-                    "alsa_output.pci-0000_00_1f.3.analog-stereo.monitor",// Use the default device.
+                    name.c_str(),// Use the default device.
                     "System sound",            // Description of our stream.
                     &ss,                // Our sample format.
                     NULL,               // Use default channel map
@@ -83,7 +145,10 @@ int main()
         pa_usec_t latency = pa_simple_get_latency(s, &error);
         if(latency > 0)
             cout << "Latency " << latency << endl;
-        int n = sendto(sockfd, buffer, sizeof(buffer), 0, (sockaddr*)&cliaddr,  sizeof(cliaddr));
+        uint8_t sum = 0;
+        // for(int i=0; i<2048; i++) sum |= buffer[i];
+        // if(sum != 0)
+        int n = sendto(sockfd, buffer, sizeof(buffer), 0, (sockaddr*)&cliaddr, sizeof(cliaddr));
     }
     reciver.join();
 }
