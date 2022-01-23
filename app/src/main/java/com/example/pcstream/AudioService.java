@@ -11,6 +11,7 @@ import android.media.AudioFormat;
 import android.media.AudioTrack;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
@@ -27,7 +28,16 @@ public class AudioService extends Service {
     private Observable<String> serveip;
     private ObservableEmitter<String> serverip_observer;
     private final IBinder binder = new LocalBinder();
-    public DatagramSocket udpSocket = null;
+    private DatagramSocket udpSocket = null;
+    private boolean running = true;
+
+    private String media_channel_id = "pc_stream_playback";
+    private PlaybackState.Builder state_builder;
+    private NotificationChannel media_channel;
+    private MediaSession media_session;
+    private Notification.Builder notification_builder;
+    private NotificationManager notification_manager;
+    private Thread runner;
 
     public class LocalBinder extends Binder {
         AudioService getService() {
@@ -36,10 +46,6 @@ public class AudioService extends Service {
     }
 
     public Observable<String> get_serverip(){
-        if(serveip == null) {
-            serveip = Observable.create(emitter -> serverip_observer = emitter);
-            serveip = serveip.share();
-        }
         return serveip;
     }
 
@@ -89,12 +95,24 @@ public class AudioService extends Service {
                 .build();
         player.play();
 
-        MediaSession ms = new MediaSession(getApplicationContext(), getPackageName());
-        ms.setActive(true);
-        ms.setMetadata(new MediaMetadata.Builder()
-                .putText(MediaMetadata.METADATA_KEY_TITLE,"PCStream")
+        if(serveip == null) {
+            serveip = Observable.create(emitter -> serverip_observer = emitter);
+            serveip = serveip.share();
+        }
+
+        media_session = new MediaSession(getApplicationContext(), getPackageName());
+        media_session.setActive(true);
+        state_builder = new PlaybackState.Builder();
+        state_builder.setActions( PlaybackState.ACTION_PLAY
+                | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_PAUSE
+                | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                );
+        state_builder.setState(PlaybackState.STATE_PLAYING, 0, 1.0f);
+        media_session.setPlaybackState(state_builder.build());
+        media_session.setMetadata(new MediaMetadata.Builder()
+                .putText(MediaMetadata.METADATA_KEY_TITLE,"Streaming from")
                 .build());
-        ms.setCallback(new MediaSession.Callback() {
+        media_session.setCallback(new MediaSession.Callback() {
             @Override
             public void onPlay() {
             }
@@ -115,80 +133,81 @@ public class AudioService extends Service {
             public void onSkipToNext() {
             }
         });
-        String channelId = "pc_stream_playback";
-        NotificationChannel channel = new NotificationChannel(
-                channelId,
-                "Channel human readable title",
-                NotificationManager.IMPORTANCE_LOW);
-        Notification notification = new Notification.Builder(getApplicationContext(), channelId)
+
+        media_channel = new NotificationChannel(media_channel_id,"media channel",
+                                        NotificationManager.IMPORTANCE_DEFAULT);
+        notification_builder = new Notification.Builder(getApplicationContext(), media_channel_id)
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setSmallIcon(R.drawable.ic_launcher_foreground)
                     .setStyle(new Notification.MediaStyle()
                             .setShowActionsInCompactView(1)
-                            .setMediaSession(ms.getSessionToken()))
-                    .setContentTitle("Track title")
-                    .setContentText("Artist - Album")
-                    .build();
+                            .setMediaSession(media_session.getSessionToken()))
+                    .setContentTitle("PCstream")
+                    .setContentText("ip")
+                    .setOngoing(true)
+                    .setShowWhen(false);
 
-//        Notification notification2 = new NotificationCompat.Builder(getApplicationContext(), channelId)
-//                // Show controls on lock screen even when user hides sensitive content.
-//                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-//                // Add media control buttons that invoke intents in your media service
-////                .addAction(R.drawable.ic_prev, "Previous", prevPendingIntent) // #0
-////                .addAction(R.drawable.ic_pause, "Pause", pausePendingIntent)  // #1
-////                .addAction(R.drawable.ic_next, "Next", nextPendingIntent)     // #2
-//                // Apply the media style template
-//                .setSmallIcon(R.drawable.ic_launcher_foreground)
-//                .setStyle(new androidx.media.app.NotificationCompat.MediaStyle())
-//                .setContentTitle("PCStream")
-//                .setContentText("active stream")
-//                //.setLargeIcon(albumArtBitmap)
-//                .build();
-        NotificationManager mNotificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
-        mNotificationManager.createNotificationChannel(channel);
-        mNotificationManager.notify(6, notification);
+        notification_manager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+        notification_manager.createNotificationChannel(media_channel);
+        notification_manager.notify(0, notification_builder.build());
 
         try {
             udpSocket = create_socket();
         } catch (Exception e) {
             e.printStackTrace();
         }
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                String prev_ip = "";
-                DatagramPacket packet = null;
-                byte[] message = new byte[chunk];
-                packet = new DatagramPacket(message, message.length);
-                int cnt = 0, sum = 0, numRead;
-                while (true) {
-                    try {
-                        udpSocket.receive(packet);
-                        if(packet.getAddress().toString() != prev_ip)
+        runner = new Thread(() -> {
+            String prev_ip = "";
+            DatagramPacket packet = null;
+            byte[] message = new byte[chunk];
+            packet = new DatagramPacket(message, message.length);
+            int cnt = 0, sum = 0, numRead;
+            while (running) {
+                try {
+                    udpSocket.receive(packet);
+                    if(packet.getAddress().toString() != prev_ip){
+                        if(serverip_observer != null)
                             serverip_observer.onNext(prev_ip);
                         prev_ip = packet.getAddress().toString();
-//                Log.d("PCstream", connected_ip);
-                        numRead = packet.getLength();
-//                Log.d("PCstream", "recebendo");
-                        sum = 0;
-                        for (byte b : message) sum |= b;
-                        if(sum != 0)
-                            player.write(message, 0, numRead);
-                        cnt += 1;
-                    } catch (Exception e) {
-                        Log.d("PCstream", "Something bad happen");
-                        e.printStackTrace();
-                        //serverip_observer.onNext("disconnected");
-                        try {
-                            udpSocket.close();
-                            udpSocket = create_socket();
-                        } catch (Exception ee) {
-                            ee.printStackTrace();
-                        }
+                        notification_builder.setContentText(prev_ip);
+                        notification_manager.notify(0, notification_builder.build());
+                    }
+                    numRead = packet.getLength();
+                    sum = 0;
+                    for (byte b : message) sum |= b;
+                    if(sum != 0)
+                        player.write(message, 0, numRead);
+                    cnt += 1;
+                } catch (Exception e) {
+                    Log.d("PCstream", "Something bad happen");
+                    e.printStackTrace();
+                    if(serverip_observer != null)
+                        serverip_observer.onNext("disconnected");
+                    try {
+                        udpSocket.close();
+                        udpSocket = create_socket();
+                    } catch (Exception ee) {
+                        ee.printStackTrace();
                     }
                 }
             }
-        }).start();
+        });
+        runner.start();
+    }
+
+    @Override
+    public void onDestroy()
+    {
+        running = false;
+        try {
+            runner.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        serverip_observer.onNext("disconnected");
+        notification_manager.cancel(0);
+        super.onDestroy();
     }
 
     @Override
