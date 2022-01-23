@@ -23,7 +23,6 @@ import java.net.InetAddress;
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.Disposable;
 
-
 class BrodcastAdress implements Runnable {
     public Context context;
     public BrodcastAdress(Context context){
@@ -71,6 +70,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean audio_conn_bound = false;
     private TextView serverip_textview;
     private Button brodcast_button;
+    private Button stop_button, start_button;
     private Disposable serverip_disposable;
 
     @Override
@@ -79,7 +79,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         serverip_textview = findViewById(R.id.server_ip);
+        stop_button = findViewById(R.id.button_stop);
+        start_button = findViewById(R.id.button_start);
+
         audio_intent = new Intent(this, AudioService.class);
+        startService(audio_intent);
         audio_conn = new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName className, IBinder service) {
@@ -96,23 +100,61 @@ public class MainActivity extends AppCompatActivity {
                 audio_conn_bound = false;
             }
         };
-        startService(audio_intent);
         bindService(audio_intent, audio_conn, Context.BIND_AUTO_CREATE);
+
+        stop_button.setOnClickListener(v -> {
+            if(audio_conn_bound){
+                unbindService(audio_conn);
+                audio_conn_bound = false;
+            }
+            stopService(audio_intent);
+            Log.d("PCstream", "Stopping audio service");
+        });
+        start_button.setOnClickListener(v -> {
+            startService(audio_intent);
+            if(!audio_conn_bound){
+                bindService(audio_intent, audio_conn, 0);
+                audio_conn_bound = true;
+            }
+            Log.d("PCstream", "Starting audio service");
+        });
 
         BrodcastAdress badress = new BrodcastAdress(getApplicationContext());
         new Thread(badress).start();
 
-        brodcast_button = findViewById(R.id.bntt_brodcast);
+        brodcast_button = findViewById(R.id.button_brodcast);
         brodcast_button.setOnClickListener(v -> {
             BrodcastAdress badress_aux = new BrodcastAdress(v.getContext());
             new Thread(badress_aux).start();
         });
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+//        if(!audio_conn_bound){
+//            bindService(audio_intent, audio_conn, 0);
+//            audio_conn_bound = true;
+//        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+//        if(audio_conn_bound) {
+//            unbindService(audio_conn);
+//            audio_conn_bound = true;
+//        }
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
-        unbindService(audio_conn);
-        audio_conn_bound = false;
+//        if(audio_conn_bound){
+//            unbindService(audio_conn);
+//            audio_conn_bound = false;
+//        }
+        stopService(audio_intent);
         Log.d("PCStream", "Stopping audio service");
     }
 }
