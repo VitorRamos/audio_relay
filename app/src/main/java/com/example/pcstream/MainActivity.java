@@ -10,8 +10,10 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.StrictMode;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -128,6 +130,16 @@ public class MainActivity extends AppCompatActivity {
             new Thread(badress_aux).start();
         });
     }
+
+//    @Override
+//    public boolean dispatchKeyEvent(KeyEvent event) {
+//        Log.d("AAAA", event.toString());
+//        if (event.getKeyCode() == KeyEvent.	KEYCODE_HEADSETHOOK) {
+//            Toast.makeText(this, "CALLING!", Toast.LENGTH_LONG).show();
+//            return true;
+//        }
+//        return super.dispatchKeyEvent(event);
+//    }
 
     @Override
     public void onResume() {

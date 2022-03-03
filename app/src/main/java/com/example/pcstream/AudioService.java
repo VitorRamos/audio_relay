@@ -19,7 +19,10 @@ import android.util.Log;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 
 import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.core.Observable;
@@ -28,8 +31,9 @@ public class AudioService extends Service {
     private Observable<String> serveip;
     private ObservableEmitter<String> serverip_observer;
     private final IBinder binder = new LocalBinder();
-    private DatagramSocket udpSocket = null;
+    private DatagramSocket socket_stream = null, socket_cmds = null;
     private boolean running = true;
+    private String prev_ip = "";
 
     private String media_channel_id = "pc_stream_playback";
     private PlaybackState.Builder state_builder;
@@ -49,7 +53,7 @@ public class AudioService extends Service {
         return serveip;
     }
 
-    public DatagramSocket create_socket() throws Exception {
+    public DatagramSocket create_socket(Integer port) throws Exception {
         DatagramSocket udpSocket = null;
         int MAX_TRIES = 10, cnt = 0;
         while (udpSocket == null && cnt < MAX_TRIES) {
@@ -58,7 +62,7 @@ public class AudioService extends Service {
                 udpSocket.setReuseAddress(true);
                 udpSocket.setBroadcast(true);
                 udpSocket.setSoTimeout(5000);
-                InetSocketAddress address = new InetSocketAddress("0.0.0.0", 4051);
+                InetSocketAddress address = new InetSocketAddress("0.0.0.0", port);
                 udpSocket.bind(address);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -101,8 +105,9 @@ public class AudioService extends Service {
         }
 
         media_session = new MediaSession(getApplicationContext(), getPackageName());
-        media_session.setActive(true);
         state_builder = new PlaybackState.Builder();
+
+        media_session.setActive(true);
         state_builder.setActions( PlaybackState.ACTION_PLAY
                 | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_PAUSE
                 | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS
@@ -115,6 +120,7 @@ public class AudioService extends Service {
         media_session.setCallback(new MediaSession.Callback() {
             @Override
             public void onPlay() {
+                Log.d("PCstream", "PLAY");
             }
 
             @Override
@@ -127,10 +133,42 @@ public class AudioService extends Service {
 
             @Override
             public void onSkipToPrevious() {
+                Thread cmd_thread = new Thread(() -> {
+                    socket_cmds = null;
+                    try {
+                        String cmd = "PREV\0";
+                        socket_cmds = new DatagramSocket();
+                        DatagramPacket sendPacket = new DatagramPacket(cmd.getBytes("UTF-8"),
+                                cmd.length(), InetAddress.getByName(prev_ip.substring(1)), 4053);
+                        socket_cmds.send(sendPacket);
+                    } catch (SocketException | UnknownHostException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+                cmd_thread.start();
+                Log.d("PCstream", "PREV");
             }
 
             @Override
             public void onSkipToNext() {
+                Thread cmd_thread = new Thread(() -> {
+                    socket_cmds = null;
+                    try {
+                        String cmd = "NEXT\0";
+                        socket_cmds = new DatagramSocket();
+                        DatagramPacket sendPacket = new DatagramPacket(cmd.getBytes("UTF-8"),
+                                cmd.length(), InetAddress.getByName(prev_ip.substring(1)), 4053);
+                        socket_cmds.send(sendPacket);
+                    } catch (SocketException | UnknownHostException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+                cmd_thread.start();
+                Log.d("PCstream", "NEXT");
             }
         });
 
@@ -152,19 +190,18 @@ public class AudioService extends Service {
         notification_manager.notify(0, notification_builder.build());
 
         try {
-            udpSocket = create_socket();
+            socket_stream = create_socket(4051);
         } catch (Exception e) {
             e.printStackTrace();
         }
         runner = new Thread(() -> {
-            String prev_ip = "";
             DatagramPacket packet = null;
             byte[] message = new byte[chunk];
             packet = new DatagramPacket(message, message.length);
             int cnt = 0, sum = 0, numRead;
             while (running) {
                 try {
-                    udpSocket.receive(packet);
+                    socket_stream.receive(packet);
                     if(packet.getAddress().toString() != prev_ip){
                         if(serverip_observer != null)
                             serverip_observer.onNext(prev_ip);
@@ -184,8 +221,8 @@ public class AudioService extends Service {
                     if(serverip_observer != null)
                         serverip_observer.onNext("disconnected");
                     try {
-                        udpSocket.close();
-                        udpSocket = create_socket();
+                        socket_stream.close();
+                        socket_stream = create_socket(4051);
                     } catch (Exception ee) {
                         ee.printStackTrace();
                     }

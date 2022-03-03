@@ -11,6 +11,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+#include "dbuscontrol.cpp"
+
 using namespace std;
 
 sockaddr_in cliaddr;
@@ -41,6 +43,38 @@ string recv_server_addr()
         char str[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &(cliaddr.sin_addr), str, INET_ADDRSTRLEN);
         cout << buff << " " << str << endl;
+    }
+}
+
+void handle_cmds()
+{
+    int sockfd;
+    sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    socklen_t len = sizeof(addr);
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("0.0.0.0");
+    addr.sin_port = htons(4053);
+
+    sockaddr_in caddr;
+    
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    bind(sockfd, (sockaddr*)&addr, sizeof(addr));
+
+    char buff[12];
+    while(1){
+        recvfrom(sockfd, buff, 12, 0, (sockaddr*)&caddr, &len);
+        buff[11] = '\0';
+        char str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(caddr.sin_addr), str, INET_ADDRSTRLEN);
+        cout << buff << " " << str << endl;
+        if(strcmp(buff, "NEXT")){
+            dbus_media_control("org.mpris.MediaPlayer2.Player.Previous");
+        }
+        if(strcmp(buff, "PREV")){
+            dbus_media_control("org.mpris.MediaPlayer2.Player.Next");
+        }
     }
 }
 
@@ -104,6 +138,7 @@ string get_monitor_name(){
 int main()
 {
     thread reciver(recv_server_addr);
+    thread cmds(handle_cmds);
     int sockfd;
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -151,4 +186,5 @@ int main()
         int n = sendto(sockfd, buffer, sizeof(buffer), 0, (sockaddr*)&cliaddr, sizeof(cliaddr));
     }
     reciver.join();
+    cmds.join();
 }
