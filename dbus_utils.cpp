@@ -1,6 +1,4 @@
-#include <dbus/dbus.h>
-#include <iostream>
-#include <vector>
+#include "dbus_utils.h"
 
 using namespace std;
 
@@ -19,6 +17,7 @@ vector<string> get_players(){
     DBusConnection *connection;
     DBusError error;
     DBusMessage *message;
+    DBusMessage *reply;
     dbus_bool_t print_reply = TRUE;
     dbus_bool_t print_reply_literal = FALSE;
     int reply_timeout = -1;
@@ -31,43 +30,23 @@ vector<string> get_players(){
     dbus_error_init(&error);
     connection = dbus_bus_get(type, &error);
 
-    char *last_dot;
-    last_dot = (char*)strrchr(name.c_str(), '.');
-    *last_dot = '\0';
-
-    if (!dbus_validate_interface(name.c_str(), &error))
-    {
-        /* Typically this is "Interface name was not valid: \"xxx\""
-            * so we don't need to prefix anything special */
-        fprintf(stderr, "%s\n", error.message);
-        dbus_error_free(&error);
-        return res;
-    }
-
-    if (!dbus_validate_member(last_dot + 1, &error))
-    {
-        fprintf(stderr, "Invalid method name: %s\n", error.message);
-        dbus_error_free(&error);
-        return res;
-    }
+    string last_dot = name.substr(name.find_last_of(".")+1);
+    name = name.substr(0, name.find_last_of("."));
 
     message = dbus_message_new_method_call(NULL,
-                                            path.c_str(),
-                                            name.c_str(),
-                                            last_dot + 1);
+                                            path.data(),
+                                            name.data(),
+                                            last_dot.data());
     handle_oom(message != NULL);
     dbus_message_set_auto_start(message, TRUE);
  
-
     if (dest && !dbus_message_set_destination(message, dest))
     {
-        fprintf(stderr, "Not enough memory\n");
+        cerr << "Not enough memory" << endl;
         return res;
     }
 
     dbus_message_iter_init_append(message, &iter);
-    
-    DBusMessage *reply;
 
     dbus_error_init(&error);
     reply = dbus_connection_send_with_reply_and_block(connection,
@@ -75,9 +54,7 @@ vector<string> get_players(){
                                                         &error);
     if (dbus_error_is_set(&error))
     {
-        fprintf(stderr, "Error %s: %s\n",
-                error.name,
-                error.message);
+        cerr <<  "Error " << error.name << ": " << error.message << endl;
         return res;
     }
 
