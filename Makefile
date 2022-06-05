@@ -2,7 +2,7 @@ CXX = g++
 LIBS = -lpulse-simple -lpulse -lpthread -ldbus-1
 INCLUDE = -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include
 
-server_pulse : pa_utils.cpp dbus_utils.cpp server_pulse.cpp
+server_pulse : server_pulse.cpp pa_utils.cpp dbus_utils.cpp openaptx.c
 	$(CXX) -O3 $(INCLUDE) $? $(LIBS) -o $@ 
 
 install:
