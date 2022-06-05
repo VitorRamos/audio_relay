@@ -42,6 +42,16 @@ public class AudioService extends Service {
     private Notification.Builder notification_builder;
     private NotificationManager notification_manager;
     private Thread runner;
+    private boolean aptx = true;
+
+    public native int init_decode();
+    static {
+        System.loadLibrary("pcstream");
+    }
+    public native byte[] decode(byte[] buffer);
+    static {
+        System.loadLibrary("pcstream");
+    }
 
     public class LocalBinder extends Binder {
         AudioService getService() {
@@ -83,6 +93,16 @@ public class AudioService extends Service {
 
     @Override
     public void onCreate(){
+        Integer init_dec = 0;
+        while(init_dec == 0){
+            init_dec = init_decode();
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            Log.d("PCstream", "Trying to init aptx ctx");
+        }
         int chunk = 2048;
         AudioTrack player = new AudioTrack.Builder()
                 .setAudioAttributes(new AudioAttributes.Builder()
@@ -196,7 +216,14 @@ public class AudioService extends Service {
         }
         runner = new Thread(() -> {
             DatagramPacket packet = null;
-            byte[] message = new byte[chunk];
+            byte[] message;
+            byte[] dec_message;
+            if(aptx) {
+                message = new byte[512];
+            }
+            else{
+                message = new byte[chunk];
+            }
             packet = new DatagramPacket(message, message.length);
             int cnt = 0, sum = 0, numRead;
             while (running) {
@@ -212,8 +239,13 @@ public class AudioService extends Service {
                     numRead = packet.getLength();
                     sum = 0;
                     for (byte b : message) sum |= b;
-                    if(sum != 0)
-                        player.write(message, 0, numRead);
+                    if(sum != 0){
+                        if(aptx)
+                            dec_message = decode(message);
+                        else
+                            dec_message = message;
+                        player.write(dec_message, 0, chunk);
+                    }
                     cnt += 1;
                 } catch (Exception e) {
                     Log.d("PCstream", "Something bad happen");
