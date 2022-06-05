@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean audio_conn_bound = false;
     private TextView serverip_textview;
     private Button brodcast_button;
-    private Button stop_button, start_button;
+    private Button stop_button, start_button, aptx_button;
     private Disposable serverip_disposable;
 
     @Override
@@ -79,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         serverip_textview = findViewById(R.id.server_ip);
+        aptx_button = findViewById(R.id.button_aptx);
         stop_button = findViewById(R.id.button_stop);
         start_button = findViewById(R.id.button_start);
 
@@ -102,6 +103,10 @@ public class MainActivity extends AppCompatActivity {
         };
         bindService(audio_intent, audio_conn, Context.BIND_AUTO_CREATE);
 
+        aptx_button.setOnClickListener(v -> {
+            // TODO change buffer of message size
+            audio_service.aptx = !audio_service.aptx;
+        });
         stop_button.setOnClickListener(v -> {
             if(audio_conn_bound){
                 unbindService(audio_conn);

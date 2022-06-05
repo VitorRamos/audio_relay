@@ -42,7 +42,7 @@ public class AudioService extends Service {
     private Notification.Builder notification_builder;
     private NotificationManager notification_manager;
     private Thread runner;
-    private boolean aptx = true;
+    public boolean aptx = true;
 
     public native int init_decode();
     static {
@@ -215,19 +215,18 @@ public class AudioService extends Service {
             e.printStackTrace();
         }
         runner = new Thread(() -> {
-            DatagramPacket packet = null;
-            byte[] message;
+            DatagramPacket packet = null, enc_packet = null, normal_packet = null;
+            byte[] message = new byte[chunk];
             byte[] dec_message;
-            if(aptx) {
-                message = new byte[512];
-            }
-            else{
-                message = new byte[chunk];
-            }
-            packet = new DatagramPacket(message, message.length);
+            enc_packet = new DatagramPacket(message, 512);
+            normal_packet = new DatagramPacket(message, 2048);
             int cnt = 0, sum = 0, numRead;
             while (running) {
                 try {
+                    if(aptx)
+                        packet = enc_packet;
+                    else
+                        packet = normal_packet;
                     socket_stream.receive(packet);
                     if(packet.getAddress().toString() != prev_ip){
                         if(serverip_observer != null)
