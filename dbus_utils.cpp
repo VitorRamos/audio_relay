@@ -94,10 +94,12 @@ void dbus_media_control(string name)
     int reply_timeout = -1;
     int message_type = DBUS_MESSAGE_TYPE_METHOD_CALL;
 
-    vector<string> players = get_players();
-
-    char *dest = players[0].data(); // fix
-    cout << players[0] << endl;
+    // vector<string> players = get_players();
+    // if(players.size() == 0)
+    //     return;
+    // char *dest = players[0].data(); // fix
+    const char *dest = "playerctld"; // fix
+    cout << dest << endl;
     char path[] = "/org/mpris/MediaPlayer2";
 
     dbus_error_init(&error);
