@@ -111,7 +111,7 @@ public class AudioService extends Service {
                         .build())
                 .setAudioFormat(new AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(44100)
+                        .setSampleRate(48000)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                         .build())
                 .setBufferSizeInBytes(chunk)

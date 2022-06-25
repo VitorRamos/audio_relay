@@ -77,11 +77,11 @@ void handle_cmds()
 
 int main(int argc, char** argv)
 {
-    bool with_aptx = false;
+    bool with_aptx = true;
     if(argc == 2){
-        if(strcmp(argv[1], "--aptx") == 0){
+        if(strcmp(argv[1], "--no-aptx") == 0){
             with_aptx = true;
-            cout << "aptx enabled" << endl;
+            cout << "aptx disabled" << endl;
         }
     }
     thread reciver(recv_server_addr);
@@ -95,7 +95,7 @@ int main(int argc, char** argv)
     
     ss.format = PA_SAMPLE_S16LE;
     ss.channels = 2;
-    ss.rate = 44100;
+    ss.rate = 48000;
     
     battr.maxlength = 65536; // max buffer len
     battr.tlength = 2048; // target buffer len
