@@ -13,7 +13,7 @@ use pulse::{
     def::BufferAttr,
     mainloop::standard::Mainloop,
     sample,
-    stream::Direction,
+    stream::Direction, time::MicroSeconds,
 };
 use std::{
     borrow::Cow,
@@ -166,11 +166,13 @@ fn main() {
                 minreq: 512,
                 fragsize: 2048,
             };
+            let monitor_name = pulse_get_source_by_name("Monitor of Built-in");
+            info!("Output: {monitor_name}");
             let pulse_cnn = Simple::new(
                 None,
                 "pc_relay",
                 Direction::Record,
-                Some(&pulse_get_source_by_name("Monitor of Built-in")),
+                Some(&monitor_name),
                 "System sound",
                 &audio_spec,
                 None,
@@ -182,6 +184,10 @@ fn main() {
                 pulse_cnn.read(&mut buffer).unwrap_or_else(|err| {
                     error!("{}", err);
                 });
+                let lat = pulse_cnn.get_latency().unwrap_or(MicroSeconds::from_secs_f32(0.0));
+                if lat > MicroSeconds(0) {
+                    info!("Latancy: {lat}");
+                }
                 // if buffer.iter().map(|&x| x as u64).sum::<u64>() == 0 {
                 //     continue;
                 // }
@@ -207,13 +213,13 @@ fn main() {
                             );
                         }
                         match socket.send_to(&out_buffer, client) {
-                            Ok(nbytes) => info!("Sending to {:?} {}", client, nbytes),
+                            Ok(nbytes) => debug!("Sending to {:?} {}", client, nbytes),
                             Err(err) => error!("{}", err),
                         }
                     }
                 } else {
                     match socket.send_to(&buffer, client) {
-                        Ok(nbytes) => info!("Sending to {:?} {}", client, nbytes),
+                        Ok(nbytes) => debug!("Sending to {:?} {}", client, nbytes),
                         Err(err) => error!("{}", err),
                     }
                 }
