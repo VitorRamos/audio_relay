@@ -27,7 +27,7 @@ struct Args {
     port_cmds: u16,
 }
 
-fn get_source_by_name(pattern: &'static str) -> String {
+fn pulse_get_source_by_name(pattern: &'static str) -> String {
     let mut main_loop = Mainloop::new().unwrap();
     let mut ctx = Context::new(&main_loop, "test").unwrap();
     ctx.set_state_callback(Some(Box::new(|| {})));
@@ -155,7 +155,7 @@ fn main() {
                 None,
                 "pc_relay",
                 Direction::Record,
-                Some(&get_source_by_name("Monitor of Built-in")),
+                Some(&pulse_get_source_by_name("Monitor of Built-in")),
                 "System sound",
                 &audio_spec,
                 None,
