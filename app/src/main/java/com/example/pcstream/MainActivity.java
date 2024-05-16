@@ -69,8 +69,6 @@ public class MainActivity extends AppCompatActivity {
     private ServiceConnection audio_conn;
     private boolean audio_conn_bound = false;
     private TextView serverip_textview;
-    private Button brodcast_button;
-    private Button stop_button, start_button, aptx_button;
     private Disposable serverip_disposable;
 
     @Override
@@ -79,9 +77,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         serverip_textview = findViewById(R.id.server_ip);
-        aptx_button = findViewById(R.id.button_aptx);
-        stop_button = findViewById(R.id.button_stop);
-        start_button = findViewById(R.id.button_start);
+        Button aptx_button = findViewById(R.id.button_aptx);
+        Button stop_button = findViewById(R.id.button_stop);
+        Button start_button = findViewById(R.id.button_start);
 
         audio_intent = new Intent(this, AudioService.class);
         startService(audio_intent);
@@ -127,7 +125,7 @@ public class MainActivity extends AppCompatActivity {
         BrodcastAdress badress = new BrodcastAdress(getApplicationContext());
         new Thread(badress).start();
 
-        brodcast_button = findViewById(R.id.button_brodcast);
+        Button brodcast_button = findViewById(R.id.button_brodcast);
         brodcast_button.setOnClickListener(v -> {
             BrodcastAdress badress_aux = new BrodcastAdress(v.getContext());
             new Thread(badress_aux).start();

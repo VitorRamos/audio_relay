@@ -4,7 +4,7 @@
 
 # Sets the minimum version of CMake required to build the native library.
 
-cmake_minimum_required(VERSION 3.18.1)
+cmake_minimum_required(VERSION 3.22.1)
 
 # Declares and names the project.
 project("pcstream")
@@ -13,7 +13,6 @@ project("pcstream")
 # or SHARED, and provides the relative paths to its source code.
 # You can define multiple libraries, and CMake builds them for you.
 # Gradle automatically packages shared libraries with your APK.
-set(CMAKE_CXX_FLAGS "-mavx2 -O3")
 add_library( # Sets the name of the library.
              pcstream
 
@@ -22,7 +21,7 @@ add_library( # Sets the name of the library.
 
              # Provides a relative path to your source file(s).
              pcstream.cpp )
-
+target_compile_options(pcstream PRIVATE -O3)
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
 # default, you only need to specify the name of the public NDK library

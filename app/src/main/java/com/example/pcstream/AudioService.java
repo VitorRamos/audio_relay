@@ -35,10 +35,6 @@ public class AudioService extends Service {
     private boolean running = true;
     private String prev_ip = "";
 
-    private String media_channel_id = "pc_stream_playback";
-    private PlaybackState.Builder state_builder;
-    private NotificationChannel media_channel;
-    private MediaSession media_session;
     private Notification.Builder notification_builder;
     private NotificationManager notification_manager;
     private Thread runner;
@@ -124,8 +120,8 @@ public class AudioService extends Service {
             serveip = serveip.share();
         }
 
-        media_session = new MediaSession(getApplicationContext(), getPackageName());
-        state_builder = new PlaybackState.Builder();
+        MediaSession media_session = new MediaSession(getApplicationContext(), getPackageName());
+        PlaybackState.Builder state_builder = new PlaybackState.Builder();
 
         media_session.setActive(true);
         state_builder.setActions( PlaybackState.ACTION_PLAY
@@ -192,8 +188,9 @@ public class AudioService extends Service {
             }
         });
 
-        media_channel = new NotificationChannel(media_channel_id,"media channel",
-                                        NotificationManager.IMPORTANCE_DEFAULT);
+        String media_channel_id = "pc_stream_playback";
+        NotificationChannel media_channel = new NotificationChannel(media_channel_id, "media channel",
+                NotificationManager.IMPORTANCE_DEFAULT);
         notification_builder = new Notification.Builder(getApplicationContext(), media_channel_id)
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setSmallIcon(R.drawable.ic_launcher_foreground)
