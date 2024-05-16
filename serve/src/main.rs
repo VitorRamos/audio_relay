@@ -1,9 +1,12 @@
 extern crate libpulse_binding as pulse;
 extern crate libpulse_simple_binding as psimple;
 use clap::Parser;
+use dbus::{arg::messageitem::MessageItem, blocking::{BlockingSender, Connection}, Message};
+use log::{debug, error, info};
 use psimple::Simple;
-use pulse::{def::BufferAttr, sample, stream::Direction};
+use pulse::{context::{Context, FlagSet}, def::BufferAttr, mainloop::standard::Mainloop, sample, stream::Direction};
 use std::{
+    borrow::Cow,
     net::{Ipv4Addr, SocketAddr, UdpSocket},
     sync::{Arc, Mutex},
     time::Duration,
@@ -25,9 +28,6 @@ struct Args {
 }
 
 fn get_source_by_name(pattern: &'static str) -> String {
-    use pulse::context::{Context, FlagSet};
-    use pulse::mainloop::standard::Mainloop;
-
     let mut main_loop = Mainloop::new().unwrap();
     let mut ctx = Context::new(&main_loop, "test").unwrap();
     ctx.set_state_callback(Some(Box::new(|| {})));
@@ -57,11 +57,64 @@ fn get_source_by_name(pattern: &'static str) -> String {
     a
 }
 
-fn spwan_udp_server(addr: &str, port: u16, func: impl Fn(String)){
+fn dbus_media_control(name: &str) {
+    let cnn = Connection::new_session().expect("Failed to open connection to session message bus");
+    let path = "/org/mpris/MediaPlayer2";
+    let dest = "playerctld";
+    let last_dot = name.rsplit('.').next().expect("Failed to split string");
+    let name = &name[..name.rfind('.').expect("Failed to find last dot")];
+    let message = Message::new_method_call(dest, path, name, last_dot)
+        .expect("Failed to create message");
+    let reply = cnn.send_with_reply_and_block(message, Duration::from_millis(5000))
+        .expect("Failed to send message and receive reply");
+    if reply.get_items().is_empty() {
+        eprintln!("Received empty reply");
+    }
+}
 
+fn _dbus_get_players() -> Vec<String> {
+    let mut res = Vec::new();
+    let cnn = Connection::new_session().expect("Fail to open dbus connection");
+    let path = "/org/freedesktop/DBus";
+    let dest = "org.freedesktop.DBus";
+    let msg = Message::new_method_call(dest, path, "org.freedesktop.DBus", "ListNames")
+        .expect("Failed to create message");
+    let reply = cnn.send_with_reply_and_block(msg, Duration::from_millis(5000))
+        .expect("Failed to send message and receive reply");
+    let items = reply.get_items();
+    if let Some(MessageItem::Array(array)) = items.first() {
+        array.iter().for_each(|item| {
+            if let MessageItem::Str(val) = item {
+                if val.contains("org.mp") {
+                    res.push(val.to_string());
+                }
+            }
+        });
+    }
+    res
+}
+
+fn udp_server_loop_data<const T: usize>(
+    addr: &str,
+    port: u16,
+    func: impl Fn(Cow<str>, SocketAddr),
+) {
+    let server_addr = format!("{}:{}", addr, port);
+    let socket =
+        UdpSocket::bind(&server_addr).expect(&format!("Failed to bind server on {}", server_addr));
+    let mut buffer = [0; T];
+    loop {
+        let (nbytes, client) = socket
+            .recv_from(&mut buffer)
+            .expect("Failed to receive data");
+        let message = String::from_utf8_lossy(&buffer[..nbytes]);
+        debug!("Received: {} from {}", message, client);
+        func(message, client);
+    }
 }
 
 fn main() {
+    env_logger::init();
     let args = Args::parse();
 
     let client_addr = Arc::new(Mutex::new(SocketAddr::new(
@@ -70,39 +123,23 @@ fn main() {
     )));
     std::thread::scope(|s| {
         s.spawn(|| {
-            let server_addr = format!("{}:{}", args.addr, args.port_addr);
-            let socket = UdpSocket::bind(&server_addr)
-                .unwrap_or_else(|_| panic!("Failed to bind server on {}", server_addr));
-            let mut buffer = [0; 12];
-            loop {
-                let (nbytes, mut src) = socket
-                    .recv_from(&mut buffer)
-                    .expect("Failed to receive data");
-                let message = String::from_utf8_lossy(&buffer[..nbytes]);
-                println!("Received: {} from {}", message, src);
-                src.set_port(4051);
-                *client_addr.lock().unwrap() = src;
-            }
+            udp_server_loop_data::<12>(&args.addr, args.port_addr, |_, mut client| {
+                client.set_port(4051);
+                *client_addr.lock().unwrap() = client;
+            })
         });
         s.spawn(|| {
-            let server_addr = format!("{}:{}", args.addr, args.port_cmds);
-            let socket = UdpSocket::bind(&server_addr)
-                .unwrap_or_else(|_| panic!("Failed to bind server on {}", server_addr));
-            let mut buffer = [0; 12];
-            loop {
-                let (nbytes, src) = socket
-                    .recv_from(&mut buffer)
-                    .expect("Failed to receive data");
-                let message = String::from_utf8_lossy(&buffer[..nbytes]).to_string();
-                println!("Received: {} from {}", message, src);
-                if message.trim() == "NEXT" {
-                } else if message.trim() == "PREV" {
+            udp_server_loop_data::<12>(&args.addr, args.port_cmds, |data, _| {
+                if data.trim() == "NEXT" {
+                    dbus_media_control("org.mpris.MediaPlayer2.Player.Previous");
+                } else if data.trim() == "PREV" {
+                    dbus_media_control("org.mpris.MediaPlayer2.Player.Next");
                 }
-            }
+            });
         });
         s.spawn(|| {
             let socket = UdpSocket::bind("0.0.0.0:0").expect("Error creating client");
-            let ss = sample::Spec {
+            let audio_spec = sample::Spec {
                 format: sample::Format::S16le,
                 rate: 48000,
                 channels: 2,
@@ -114,25 +151,30 @@ fn main() {
                 minreq: 512,
                 fragsize: 2048,
             };
-            let s = Simple::new(
+            let pulse_cnn = Simple::new(
                 None,
                 "pc_relay",
                 Direction::Record,
                 Some(&get_source_by_name("Monitor of Built-in")),
                 "System sound",
-                &ss,
+                &audio_spec,
                 None,
                 Some(&attr),
             )
-            .unwrap();
+            .expect("Fail to connect to the audio server");
             loop {
                 let mut buffer = [0u8; 2048];
-                s.read(&mut buffer).unwrap();
-                let n = socket
-                    .send_to(&buffer, *client_addr.lock().unwrap())
-                    .unwrap();
-                println!("Sending to {:?} {}", buffer, n);
-                std::thread::sleep(Duration::from_secs(1));
+                pulse_cnn.read(&mut buffer).unwrap_or_else(|err| {
+                    error!("{}", err);
+                });
+                if buffer.iter().map(|&x| x as u64).sum::<u64>() == 0 {
+                    continue;
+                }
+                let client = *client_addr.lock().unwrap();
+                match socket.send_to(&buffer, client) {
+                    Ok(nbytes) => info!("Sending to {:?} {}", client, nbytes),
+                    Err(err) => error!("{}", err),
+                }
             }
         });
     });
