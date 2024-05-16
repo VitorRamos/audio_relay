@@ -1,16 +1,29 @@
 extern crate libpulse_binding as pulse;
 extern crate libpulse_simple_binding as psimple;
 use clap::Parser;
-use dbus::{arg::messageitem::MessageItem, blocking::{BlockingSender, Connection}, Message};
+use dbus::{
+    arg::messageitem::MessageItem,
+    blocking::{BlockingSender, Connection},
+    Message,
+};
 use log::{debug, error, info};
 use psimple::Simple;
-use pulse::{context::{Context, FlagSet}, def::BufferAttr, mainloop::standard::Mainloop, sample, stream::Direction};
+use pulse::{
+    context::{Context, FlagSet},
+    def::BufferAttr,
+    mainloop::standard::Mainloop,
+    sample,
+    stream::Direction,
+};
 use std::{
     borrow::Cow,
     net::{Ipv4Addr, SocketAddr, UdpSocket},
     sync::{Arc, Mutex},
     time::Duration,
 };
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+mod bindings;
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -63,9 +76,10 @@ fn dbus_media_control(name: &str) {
     let dest = "playerctld";
     let last_dot = name.rsplit('.').next().expect("Failed to split string");
     let name = &name[..name.rfind('.').expect("Failed to find last dot")];
-    let message = Message::new_method_call(dest, path, name, last_dot)
-        .expect("Failed to create message");
-    let reply = cnn.send_with_reply_and_block(message, Duration::from_millis(5000))
+    let message =
+        Message::new_method_call(dest, path, name, last_dot).expect("Failed to create message");
+    let reply = cnn
+        .send_with_reply_and_block(message, Duration::from_millis(5000))
         .expect("Failed to send message and receive reply");
     if reply.get_items().is_empty() {
         eprintln!("Received empty reply");
@@ -79,7 +93,8 @@ fn _dbus_get_players() -> Vec<String> {
     let dest = "org.freedesktop.DBus";
     let msg = Message::new_method_call(dest, path, "org.freedesktop.DBus", "ListNames")
         .expect("Failed to create message");
-    let reply = cnn.send_with_reply_and_block(msg, Duration::from_millis(5000))
+    let reply = cnn
+        .send_with_reply_and_block(msg, Duration::from_millis(5000))
         .expect("Failed to send message and receive reply");
     let items = reply.get_items();
     if let Some(MessageItem::Array(array)) = items.first() {
@@ -100,8 +115,8 @@ fn udp_server_loop_data<const T: usize>(
     func: impl Fn(Cow<str>, SocketAddr),
 ) {
     let server_addr = format!("{}:{}", addr, port);
-    let socket =
-        UdpSocket::bind(&server_addr).expect(&format!("Failed to bind server on {}", server_addr));
+    let socket = UdpSocket::bind(&server_addr)
+        .unwrap_or_else(|_| panic!("Failed to bind server on {}", server_addr));
     let mut buffer = [0; T];
     loop {
         let (nbytes, client) = socket
@@ -167,13 +182,40 @@ fn main() {
                 pulse_cnn.read(&mut buffer).unwrap_or_else(|err| {
                     error!("{}", err);
                 });
-                if buffer.iter().map(|&x| x as u64).sum::<u64>() == 0 {
-                    continue;
-                }
+                // if buffer.iter().map(|&x| x as u64).sum::<u64>() == 0 {
+                //     continue;
+                // }
                 let client = *client_addr.lock().unwrap();
-                match socket.send_to(&buffer, client) {
-                    Ok(nbytes) => info!("Sending to {:?} {}", client, nbytes),
-                    Err(err) => error!("{}", err),
+                if args.with_aptx {
+                    unsafe {
+                        let mut out_buffer = [0u8; 512];
+                        let ctx = bindings::aptx_init(0);
+                        let mut written = 0usize;
+                        let processed = bindings::aptx_encode(
+                            ctx,
+                            buffer.as_ptr(),
+                            buffer.len(),
+                            out_buffer.as_mut_ptr(),
+                            out_buffer.len(),
+                            &mut written,
+                        );
+                        if processed != buffer.len() {
+                            error!(
+                                "Fail to encode processed {} out of {}",
+                                processed,
+                                buffer.len()
+                            );
+                        }
+                        match socket.send_to(&out_buffer, client) {
+                            Ok(nbytes) => info!("Sending to {:?} {}", client, nbytes),
+                            Err(err) => error!("{}", err),
+                        }
+                    }
+                } else {
+                    match socket.send_to(&buffer, client) {
+                        Ok(nbytes) => info!("Sending to {:?} {}", client, nbytes),
+                        Err(err) => error!("{}", err),
+                    }
                 }
             }
         });
