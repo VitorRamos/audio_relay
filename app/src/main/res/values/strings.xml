@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">PCstream</string>
+    <string name="connected">connected to</string>
+    <string name="bnnt_connect">connect</string>
+    <string name="bnnt_brodcast">brodcast</string>
+    <string name="bnnt_stop">stop</string>
+    <string name="bnnt_start">start</string>
+    <string name="hint_server_ip">server ip</string>
+    <string name="bntt_apx">APTX</string>
+</resources>

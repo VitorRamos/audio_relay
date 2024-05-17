@@ -132,32 +132,14 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-//    @Override
-//    public boolean dispatchKeyEvent(KeyEvent event) {
-//        Log.d("AAAA", event.toString());
-//        if (event.getKeyCode() == KeyEvent.	KEYCODE_HEADSETHOOK) {
-//            Toast.makeText(this, "CALLING!", Toast.LENGTH_LONG).show();
-//            return true;
-//        }
-//        return super.dispatchKeyEvent(event);
-//    }
-
     @Override
     public void onResume() {
         super.onResume();
-//        if(!audio_conn_bound){
-//            bindService(audio_intent, audio_conn, 0);
-//            audio_conn_bound = true;
-//        }
     }
 
     @Override
     public void onPause() {
         super.onPause();
-//        if(audio_conn_bound) {
-//            unbindService(audio_conn);
-//            audio_conn_bound = true;
-//        }
     }
 
     @Override

@@ -39,13 +39,10 @@ public class AudioService extends Service {
     private Thread runner;
     public boolean aptx = true;
 
-    public native int init_decode();
+    public native int init_decode_rust();
+    public native void decode_rust(byte[] input, byte[] output);
     static {
-        System.loadLibrary("pcstream");
-    }
-    public native byte[] decode(byte[] buffer);
-    static {
-        System.loadLibrary("pcstream");
+        System.loadLibrary("aptx_rust");
     }
 
     public class LocalBinder extends Binder {
@@ -90,7 +87,7 @@ public class AudioService extends Service {
     public void onCreate(){
         int init_dec = 0;
         while(init_dec == 0){
-            init_dec = init_decode();
+            init_dec = init_decode_rust();
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
@@ -207,18 +204,20 @@ public class AudioService extends Service {
             e.printStackTrace();
         }
         runner = new Thread(() -> {
-            DatagramPacket packet, enc_packet, normal_packet;
+            byte[] message_aptx = new byte[chunk/4];
+            DatagramPacket packet_aptx = new DatagramPacket(message_aptx, chunk/4);
             byte[] message = new byte[chunk];
-            byte[] dec_message;
-            enc_packet = new DatagramPacket(message, 512);
-            normal_packet = new DatagramPacket(message, 2048);
-            int cnt = 0, sum, numRead;
+            DatagramPacket packet_no_aptx = new DatagramPacket(message, chunk);
+            DatagramPacket packet;
+            int pkg_count = 0;
             while (running) {
                 try {
-                    if(aptx)
-                        packet = enc_packet;
-                    else
-                        packet = normal_packet;
+                    if(aptx) {
+                        packet = packet_aptx;
+                    }
+                    else {
+                        packet = packet_no_aptx;
+                    }
                     socket_stream.receive(packet);
                     if(packet.getAddress().toString() != prev_ip){
                         if(serverip_observer != null)
@@ -227,17 +226,11 @@ public class AudioService extends Service {
                         notification_builder.setContentText(prev_ip);
                         notification_manager.notify(0, notification_builder.build());
                     }
-                    numRead = packet.getLength();
-                    sum = 0;
-                    for (byte b : message) sum |= b;
-                    if(sum != 0){
-                        if(aptx)
-                            dec_message = decode(message);
-                        else
-                            dec_message = message;
-                        player.write(dec_message, 0, chunk);
+                    if(aptx) {
+                        decode_rust(message_aptx, message);
                     }
-                    cnt += 1;
+                    player.write(message, 0, chunk);
+                    pkg_count += 1;
                 } catch (Exception e) {
                     Log.d("PCstream", "Something bad happen");
                     e.printStackTrace();
