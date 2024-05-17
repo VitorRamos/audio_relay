@@ -23,6 +23,11 @@
 #include <android/log.h>
 #include <jni.h>
 
+#include <cstddef>
+#include <cstdlib>
+#include <cstdint>
+#include <cstring>
+
 #define LOGI(...) \
   ((void)__android_log_print(ANDROID_LOG_INFO, "pcstream::", __VA_ARGS__))
 
@@ -30,12 +35,9 @@
 #define OPENAPTX_MINOR 2
 #define OPENAPTX_PATCH 1
 
-#include <stddef.h>
-
 extern const int aptx_major;
 extern const int aptx_minor;
 extern const int aptx_patch;
-
 
 struct aptx_context;
 
@@ -168,11 +170,6 @@ size_t aptx_decode_sync_finish(struct aptx_context *ctx);
  * You should have received a copy of the GNU General Public License
  * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
 
 #if (!defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L) && !defined(inline)
 #define inline

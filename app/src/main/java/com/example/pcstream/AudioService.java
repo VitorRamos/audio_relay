@@ -21,8 +21,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 
 import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.core.Observable;
@@ -89,7 +88,7 @@ public class AudioService extends Service {
 
     @Override
     public void onCreate(){
-        Integer init_dec = 0;
+        int init_dec = 0;
         while(init_dec == 0){
             init_dec = init_decode();
             try {
@@ -154,11 +153,9 @@ public class AudioService extends Service {
                     try {
                         String cmd = "PREV\0";
                         socket_cmds = new DatagramSocket();
-                        DatagramPacket sendPacket = new DatagramPacket(cmd.getBytes("UTF-8"),
+                        DatagramPacket sendPacket = new DatagramPacket(cmd.getBytes(StandardCharsets.UTF_8),
                                 cmd.length(), InetAddress.getByName(prev_ip.substring(1)), 4053);
                         socket_cmds.send(sendPacket);
-                    } catch (SocketException | UnknownHostException e) {
-                        e.printStackTrace();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -174,11 +171,9 @@ public class AudioService extends Service {
                     try {
                         String cmd = "NEXT\0";
                         socket_cmds = new DatagramSocket();
-                        DatagramPacket sendPacket = new DatagramPacket(cmd.getBytes("UTF-8"),
+                        DatagramPacket sendPacket = new DatagramPacket(cmd.getBytes(StandardCharsets.UTF_8),
                                 cmd.length(), InetAddress.getByName(prev_ip.substring(1)), 4053);
                         socket_cmds.send(sendPacket);
-                    } catch (SocketException | UnknownHostException e) {
-                        e.printStackTrace();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -212,12 +207,12 @@ public class AudioService extends Service {
             e.printStackTrace();
         }
         runner = new Thread(() -> {
-            DatagramPacket packet = null, enc_packet = null, normal_packet = null;
+            DatagramPacket packet, enc_packet, normal_packet;
             byte[] message = new byte[chunk];
             byte[] dec_message;
             enc_packet = new DatagramPacket(message, 512);
             normal_packet = new DatagramPacket(message, 2048);
-            int cnt = 0, sum = 0, numRead;
+            int cnt = 0, sum, numRead;
             while (running) {
                 try {
                     if(aptx)

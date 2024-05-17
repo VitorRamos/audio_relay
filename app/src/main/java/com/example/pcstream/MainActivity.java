@@ -23,9 +23,9 @@ import java.net.InetAddress;
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 import io.reactivex.rxjava3.disposables.Disposable;
 
-class BrodcastAdress implements Runnable {
+class BroadcastAddress implements Runnable {
     public Context context;
-    public BrodcastAdress(Context context){
+    public BroadcastAddress(Context context){
         this.context = context;
     }
     InetAddress getBroadcastAddress() throws IOException {
@@ -122,12 +122,12 @@ public class MainActivity extends AppCompatActivity {
             Log.d("PCstream", "Starting audio service");
         });
 
-        BrodcastAdress badress = new BrodcastAdress(getApplicationContext());
+        BroadcastAddress badress = new BroadcastAddress(getApplicationContext());
         new Thread(badress).start();
 
         Button brodcast_button = findViewById(R.id.button_brodcast);
         brodcast_button.setOnClickListener(v -> {
-            BrodcastAdress badress_aux = new BrodcastAdress(v.getContext());
+            BroadcastAddress badress_aux = new BroadcastAddress(v.getContext());
             new Thread(badress_aux).start();
         });
     }
