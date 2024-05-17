@@ -149,8 +149,9 @@ int main(int argc, char** argv)
                 break;
             n = sendto(sockfd, output_buffer, sizeof(output_buffer), 0, (sockaddr*)&cliaddr, sizeof(cliaddr));
         }
-        else
+        else {
             n = sendto(sockfd, buffer, sizeof(buffer), 0, (sockaddr*)&cliaddr, sizeof(cliaddr));
+        }
     }
     reciver.join();
     cmds.join();

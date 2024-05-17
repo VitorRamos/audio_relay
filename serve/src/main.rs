@@ -13,7 +13,8 @@ use pulse::{
     def::BufferAttr,
     mainloop::standard::Mainloop,
     sample,
-    stream::Direction, time::MicroSeconds,
+    stream::Direction,
+    time::MicroSeconds,
 };
 use std::{
     borrow::Cow,
@@ -41,10 +42,12 @@ struct Args {
 }
 
 fn pulse_get_source_by_name(pattern: &'static str) -> String {
-    let mut main_loop = Mainloop::new().unwrap();
-    let mut ctx = Context::new(&main_loop, "test").unwrap();
+    let mut main_loop = Mainloop::new().expect("Fail to create pulse mainloop");
+    let mut ctx = Context::new(&main_loop, "test").expect("Fail to get pulse context");
     ctx.set_state_callback(Some(Box::new(|| {})));
-    ctx.connect(None, FlagSet::NOFLAGS, None).unwrap();
+    ctx.connect(None, FlagSet::NOFLAGS, None)
+        .map_err(|err| error!("{err}"))
+        .unwrap();
     loop {
         match ctx.get_state() {
             pulse::context::State::Ready => {
@@ -129,9 +132,10 @@ fn udp_server_loop_data<const T: usize>(
 }
 
 fn main() {
+    std::env::set_var("RUST_LOG", "info");
     env_logger::init();
     let args = Args::parse();
-
+    args.with_aptx.then(|| info!("APTX enabled"));
     let client_addr = Arc::new(Mutex::new(SocketAddr::new(
         Ipv4Addr::new(192, 168, 0, 13).into(),
         4051,
@@ -141,6 +145,7 @@ fn main() {
             udp_server_loop_data::<12>(&args.addr, args.port_addr, |_, mut client| {
                 client.set_port(4051);
                 *client_addr.lock().unwrap() = client;
+                info!("New client {client_addr:?}");
             })
         });
         s.spawn(|| {
@@ -179,12 +184,17 @@ fn main() {
                 Some(&attr),
             )
             .expect("Fail to connect to the audio server");
+            let ctx = unsafe { bindings::aptx_init(0) };
+            let mut buffer = [0u8; 2048];
+            let mut out_buffer = [0u8; 2048];
+            let mut written = 0usize;
             loop {
-                let mut buffer = [0u8; 2048];
                 pulse_cnn.read(&mut buffer).unwrap_or_else(|err| {
                     error!("{}", err);
                 });
-                let lat = pulse_cnn.get_latency().unwrap_or(MicroSeconds::from_secs_f32(0.0));
+                let lat = pulse_cnn
+                    .get_latency()
+                    .unwrap_or(MicroSeconds::from_secs_f32(0.0));
                 if lat > MicroSeconds(0) {
                     info!("Latancy: {lat}");
                 }
@@ -194,9 +204,6 @@ fn main() {
                 let client = *client_addr.lock().unwrap();
                 if args.with_aptx {
                     unsafe {
-                        let mut out_buffer = [0u8; 512];
-                        let ctx = bindings::aptx_init(0);
-                        let mut written = 0usize;
                         let processed = bindings::aptx_encode(
                             ctx,
                             buffer.as_ptr(),
