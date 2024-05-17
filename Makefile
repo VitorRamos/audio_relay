@@ -1,6 +1,6 @@
 CXX = g++
 LIBS = -lpulse-simple -lpulse -lpthread -ldbus-1
-CXXFLAGS = -O3 -mavx2
+CXXFLAGS = -O3 -mavx2 -static-libstdc++
 INCLUDE = -I/usr/include/dbus-1.0 -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include
 FILES = server_pulse.cpp pa_utils.cpp dbus_utils.cpp openaptx.c
 
