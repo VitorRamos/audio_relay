@@ -6,7 +6,7 @@ Requires=pulseaudio.socket
 [Service]
 Type=idle
 Restart=on-failure
-ExecStart=/usr/bin/server_pulse
+ExecStart=$HOME/.cargo/bin/server_pulse
 
 [Install]
 Also=pulseaudio.socket

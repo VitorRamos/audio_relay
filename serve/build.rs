@@ -5,7 +5,7 @@ fn main() {
     println!("cargo:rustc-link-lib=openaptx");
 
     let bindings = bindgen::Builder::default()
-        .header("../openaptx.h")
+        .header("openaptx.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
@@ -17,7 +17,7 @@ fn main() {
         .arg("-O3")
         .arg("-mavx2")
         .arg("-fPIC")
-        .arg("../openaptx.c")
+        .arg("openaptx.c")
         .output()
         .expect("could not spawn `clang`")
         .status
