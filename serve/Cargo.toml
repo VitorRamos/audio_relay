@@ -1,5 +1,5 @@
 [package]
-name = "serve"
+name = "server_pulse"
 version = "0.1.0"
 edition = "2021"
 
