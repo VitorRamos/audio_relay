@@ -9,7 +9,7 @@ cd server && cargo b -r
 ### Install service
 ```bash
 cargo install --path server
-cp pcstream.service /etc/systemd/user/pcstream.service
+cp server/pcstream.service /etc/systemd/user/pcstream.service
 systemctl enable --user pcstream.service
 ```
 
