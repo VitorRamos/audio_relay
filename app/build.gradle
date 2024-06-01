@@ -52,7 +52,7 @@ dependencies {
 }
 
 // ANCHOR:cargo
-def rustBasePath = "../serve"
+def rustBasePath = "../server"
 def archTriplets = [
         'x86_64': 'x86_64-linux-android',
         'arm64-v8a': 'aarch64-linux-android',

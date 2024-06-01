@@ -20,5 +20,5 @@
 app/src/main/jniLibs/
 gradle/
 local.properties
-serve/Cargo.lock
-serve/target/
+server/Cargo.lock
+server/target/

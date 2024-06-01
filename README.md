@@ -2,7 +2,12 @@
 Ultra low latency audio relay
 
 ### Build server
-make
+cd server
+cargo b
 
-### Build client
-android studio...
+### Build android lib
+cd server
+cross b --target=aarch64-linux-android
+
+### Build apk + android lib
+./gradlew build
