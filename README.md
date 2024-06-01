@@ -2,7 +2,24 @@
 Ultra low latency audio relay
 
 ### Build server
-make
+```bash
+cd server && cargo b -r
+```
 
-### Build client
-android studio...
+### Install service
+```bash
+cargo install --path server
+cp pcstream.service /etc/systemd/user/pcstream.service
+systemctl enable --user pcstream.service
+```
+
+### Build android lib
+```bash
+cd server
+cross b -r --target=aarch64-linux-android
+```
+
+### Build apk + android lib
+```bash
+./gradlew build
+```

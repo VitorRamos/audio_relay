@@ -13,11 +13,6 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                cppFlags ''
-            }
-        }
         signingConfig signingConfigs.debug
     }
 
@@ -31,10 +26,9 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-    externalNativeBuild {
-        cmake {
-            path file('src/main/cpp/CMakeLists.txt')
-            version '3.22.1'
+    sourceSets {
+        main {
+            jniLibs.srcDir 'src/main/jniLibs'
         }
     }
     lint {
@@ -46,14 +40,69 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.10.0'
+    implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    testImplementation 'junit:junit:'
+    testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.8.1'
-    testImplementation 'org.testng:testng:6.9.6'
+    testImplementation 'org.testng:testng:7.10.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-
-    implementation 'io.reactivex.rxjava3:rxandroid:3.0.0'
-    implementation 'io.reactivex.rxjava3:rxjava:3.0.0'
+    implementation 'io.reactivex.rxjava3:rxandroid:3.0.2'
+    implementation 'io.reactivex.rxjava3:rxjava:3.1.8'
 }
+
+// ANCHOR:cargo
+def rustBasePath = "../server"
+def archTriplets = [
+        'x86_64': 'x86_64-linux-android',
+        'arm64-v8a': 'aarch64-linux-android',
+]
+
+// TODO: only pass --release if buildType is release
+archTriplets.each { arch, target ->
+    // execute cargo metadata and get path to target directory
+    tasks.create(name: "cargo-output-dir-${arch}", description: "Get cargo metadata") {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                commandLine 'cross', 'metadata', '--format-version', '1'
+                workingDir rustBasePath
+                standardOutput = os
+            }
+            def outputAsString = os.toString()
+            def json = new groovy.json.JsonSlurper().parseText(outputAsString)
+
+            logger.info("cargo target directory: ${json.target_directory}")
+            project.ext.cargo_target_directory = json.target_directory
+        }
+    }
+    // Build with cargo
+    tasks.create(name: "cargo-build-${arch}", type: Exec, description: "Building core for ${arch}", dependsOn: "cargo-output-dir-${arch}") {
+        workingDir rustBasePath
+        commandLine 'cross', 'build', "--target=${target}", '--release'
+    }
+    // Sync shared native dependencies
+    tasks.create(name: "sync-rust-deps-${arch}", type: Sync, dependsOn: "cargo-build-${arch}") {
+        from "${rustBasePath}/src/libs/${arch}"
+        include "*.so"
+        into "src/main/libs/${arch}"
+    }
+    // Copy build libs into this app's libs directory
+    tasks.create(name: "rust-deploy-${arch}", type: Copy, dependsOn: "sync-rust-deps-${arch}", description: "Copy rust libs for (${arch}) to jniLibs") {
+        from "${project.ext.cargo_target_directory}/${target}/release"
+        include "*.so"
+        into "src/main/jniLibs/${arch}"
+    }
+    // Hook up tasks to execute before building java
+    tasks.withType(JavaCompile) {
+        compileTask -> compileTask.dependsOn "rust-deploy-${arch}"
+    }
+    preBuild.dependsOn "rust-deploy-${arch}"
+    // Hook up clean tasks
+    tasks.create(name: "clean-${arch}", type: Delete, description: "Deleting built libs for ${arch}", dependsOn: "cargo-output-dir-${arch}") {
+        delete fileTree("${project.ext.cargo_target_directory}/${target}/release") {
+            include '*.so'
+        }
+    }
+    clean.dependsOn "clean-${arch}"
+}
+// ANCHOR_END:cargo
