@@ -6,7 +6,7 @@ Ultra low latency audio relay
 cd server && cargo b -r
 ```
 
-### Install server service
+### Install service
 ```bash
 cargo install --path server
 cp pcstream.service /etc/systemd/user/pcstream.service
