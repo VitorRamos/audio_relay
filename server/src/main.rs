@@ -29,6 +29,7 @@ struct Args {
 fn main() {
     use crate::aptx::AptxContext;
     use clap::Parser;
+    use cpal::traits::{DeviceTrait, StreamTrait};
     use log::{debug, error, info};
     use std::{
         net::{Ipv4Addr, SocketAddr, UdpSocket},
@@ -43,93 +44,78 @@ fn main() {
         Ipv4Addr::new(192, 168, 0, 13).into(),
         args.port_audio,
     )));
+    let client_addr_clone = client_addr.clone();
     std::thread::scope(|s| {
         s.spawn(|| {
             utils::udp_server_loop_data::<12>(&args.addr, args.port_addr, |_, mut client| {
                 client.set_port(args.port_audio);
-                *client_addr.lock().unwrap() = client;
-                info!("New client {client_addr:?}");
+                *client_addr_clone.lock().unwrap() = client;
+                info!("New client {client_addr_clone:?}");
             })
         });
         s.spawn(|| {
             utils::udp_server_loop_data::<12>(&args.addr, args.port_cmds, |data, _| {
                 if data.trim().contains("NEXT") {
                     debug!("PlayerControl::Next");
-                    utils::dbus_media_control(utils::PlayerControl::Next);
+                    utils::media_control(utils::PlayerControl::Next);
                 } else if data.trim().contains("PREV") {
                     debug!("PlayerControl::Previous");
-                    utils::dbus_media_control(utils::PlayerControl::Previous);
+                    utils::media_control(utils::PlayerControl::Previous);
                 }
             });
         });
         s.spawn(|| {
             let socket = UdpSocket::bind("0.0.0.0:0").expect("Error creating client");
-            let format = if args.hd {
-                libpulse_binding::sample::Format::S24le
-            } else {
-                libpulse_binding::sample::Format::S16le
-            };
-            let audio_spec = libpulse_binding::sample::Spec {
-                format,
-                rate: 48000,
+            let config = cpal::StreamConfig {
                 channels: 2,
+                sample_rate: cpal::SampleRate(48000),
+                buffer_size: cpal::BufferSize::Fixed(128),
             };
-            let attr = libpulse_binding::def::BufferAttr {
-                maxlength: 65536,
-                tlength: 2048,
-                prebuf: 512,
-                minreq: 512,
-                fragsize: 2048,
-            };
-            let monitor_name = utils::pulse_get_source_by_name("Monitor of Jabra");
-            info!("Output: {monitor_name}");
-            let pulse_cnn = libpulse_simple_binding::Simple::new(
-                None,
-                "pc_relay",
-                libpulse_binding::stream::Direction::Record,
-                Some(&monitor_name),
-                "System sound",
-                &audio_spec,
-                None,
-                Some(&attr),
-            )
-            .expect("Fail to connect to the audio server");
+            let device = utils::get_source_by_name("default").expect("Fail to get device");
+            info!("Output: {}", device.name().unwrap());
             let mut ctx = AptxContext::new(args.hd);
-            let mut buffer = [0u8; 2048];
             let mut enc_buffer = [0u8; 512];
-            loop {
-                match pulse_cnn.read(&mut buffer) {
-                    Ok(_) => {}
-                    Err(err) => error!("{}", err),
-                }
-                let lat = pulse_cnn
-                    .get_latency()
-                    .unwrap_or(libpulse_binding::time::MicroSeconds::from_secs_f32(0.0));
-                if lat > libpulse_binding::time::MicroSeconds(0) {
-                    info!("Latancy: {lat}");
-                }
-                let client = *client_addr.lock().unwrap();
-                if args.with_aptx {
-                    let mut written = 0usize;
-                    let processed = ctx.encode(&buffer, &mut enc_buffer, &mut written);
-                    if processed != buffer.len() {
-                        error!(
-                            "Fail to encode processed {} out of {}",
-                            processed,
-                            buffer.len()
-                        );
-                    }
-                    match socket.send_to(&enc_buffer, client) {
-                        Ok(nbytes) => debug!("Sending to {:?} {}", client, nbytes),
-                        Err(err) => error!("{}", err),
-                    }
-                } else {
-                    match socket.send_to(&buffer, client) {
-                        Ok(nbytes) => debug!("Sending to {:?} {}", client, nbytes),
-                        Err(err) => error!("{}", err),
-                    }
-                }
-            }
+            let mut cbuffer = Vec::with_capacity(4096);
+            let stream = device
+                .build_input_stream(
+                    &config,
+                    move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                        let u8slice = unsafe { utils::into_slice(data) };
+                        cbuffer.extend(u8slice);
+                        if cbuffer.len() > 2048 {
+                            let buffer = &cbuffer[..2048];
+                            let client = *client_addr.lock().unwrap();
+                            if args.with_aptx {
+                                let mut written = 0usize;
+                                let processed = ctx.encode(&buffer, &mut enc_buffer, &mut written);
+                                if processed != buffer.len() {
+                                    error!(
+                                        "Fail to encode processed {} out of {}",
+                                        processed,
+                                        buffer.len()
+                                    );
+                                }
+                                match socket.send_to(&enc_buffer, client) {
+                                    Ok(nbytes) => debug!("Sending to {:?} {}", client, nbytes),
+                                    Err(err) => error!("{}", err),
+                                }
+                            } else {
+                                match socket.send_to(&buffer, client) {
+                                    Ok(nbytes) => debug!("Sending to {:?} {}", client, nbytes),
+                                    Err(err) => error!("{}", err),
+                                }
+                            }
+                            cbuffer.drain(..2048);
+                        }
+                    },
+                    move |err| {
+                        error!("An error occurred on the input audio stream: {}", err);
+                    },
+                    None,
+                )
+                .expect("Fail to build output stream");
+            stream.play().unwrap();
+            loop {}
         });
     });
 }

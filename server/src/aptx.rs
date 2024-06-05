@@ -1174,7 +1174,7 @@ mod tests {
             ..Default::default()
         };
         channel.generate_dither();
-        assert_eq!(channel.dither[0], -209715200); 
+        assert_eq!(channel.dither[0], -209715200);
     }
 
     #[test]
@@ -1214,7 +1214,7 @@ mod tests {
         let quantization_factor = 2048;
         let tables = &AptxChannel::ALL_TABLES[0][0];
         quantize.quantize_difference(sample_difference, dither, quantization_factor, tables);
-        assert_eq!(quantize.quantized_sample, 12); 
+        assert_eq!(quantize.quantized_sample, 12);
     }
 
     #[test]
@@ -1224,7 +1224,7 @@ mod tests {
             ..Default::default()
         };
         channel.encode_channel(false);
-        assert_eq!(channel.quantize[0].quantized_sample, 63); 
+        assert_eq!(channel.quantize[0].quantized_sample, 63);
     }
 
     #[test]
@@ -1232,7 +1232,7 @@ mod tests {
         let mut channel = AptxChannel::default();
         channel.prediction[0].previous_reconstructed_sample = 1000;
         channel.decode_channel();
-        assert_eq!(channel.samples[0], 0); 
+        assert_eq!(channel.samples[0], 0);
     }
 
     #[test]
@@ -1259,7 +1259,7 @@ mod tests {
             ..Default::default()
         };
         let result = channel.pack_codeword();
-        assert_eq!(result, 39169); 
+        assert_eq!(result, 39169);
     }
 
     #[test]

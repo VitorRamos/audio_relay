@@ -1,57 +1,25 @@
-extern crate libpulse_binding as pulse;
-extern crate libpulse_simple_binding as psimple;
-
-use log::{debug, error, info};
-
+use cpal::traits::{DeviceTrait, HostTrait};
 use std::{
     borrow::Cow,
     fmt::Display,
     net::{SocketAddr, UdpSocket},
-    sync::{Arc, Mutex},
-    time::Duration,
 };
 
-use dbus::{
-    arg::messageitem::MessageItem,
-    blocking::{BlockingSender, Connection},
-    Message,
-};
+pub unsafe fn into_slice<Tin, Tout>(input: &[Tin]) -> &[Tout] {
+    let len = input.len() * std::mem::size_of::<Tin>() / std::mem::size_of::<Tout>();
+    let ptr = input.as_ptr() as *const Tout;
+    unsafe { std::slice::from_raw_parts(ptr, len) }
+}
 
-use pulse::{
-    context::{Context, FlagSet},
-    mainloop::standard::Mainloop,
-};
-
-pub fn pulse_get_source_by_name(pattern: &'static str) -> String {
-    let mut main_loop = Mainloop::new().expect("Fail to create pulse mainloop");
-    let mut ctx = Context::new(&main_loop, "test").expect("Fail to get pulse context");
-    ctx.set_state_callback(Some(Box::new(|| {})));
-    ctx.connect(None, FlagSet::NOFLAGS, None)
-        .map_err(|err| error!("{err}"))
-        .unwrap();
-    loop {
-        match ctx.get_state() {
-            pulse::context::State::Ready => {
-                break;
-            }
-            _ => main_loop.iterate(false),
-        };
-    }
-    let name = Arc::new(Mutex::new(String::new()));
-    let name_clone = name.clone();
-    let op = ctx.introspect().get_source_info_list(move |info| {
-        if let pulse::callbacks::ListResult::Item(item) = info {
-            let desc = item.description.clone().unwrap();
-            if desc.find(pattern).is_some() {
-                *name_clone.lock().unwrap() = item.name.clone().unwrap().to_string();
-            }
+pub fn get_source_by_name(pattern: &'static str) -> Option<cpal::Device> {
+    let host = cpal::default_host();
+    for d in host.output_devices().unwrap() {
+        let name = d.name().unwrap();
+        if name.contains(pattern) {
+            return Some(d);
         }
-    });
-    while let pulse::operation::State::Running = op.get_state() {
-        main_loop.iterate(false);
     }
-    let owned_name = name.lock().unwrap().clone();
-    owned_name
+    None
 }
 
 pub enum PlayerControl {
@@ -68,7 +36,12 @@ impl Display for PlayerControl {
     }
 }
 
-pub fn dbus_media_control(method: PlayerControl) {
+#[cfg(target_os = "linux")]
+pub fn media_control(method: PlayerControl) {
+    use dbus::{
+        blocking::{BlockingSender, Connection},
+        Message,
+    };
     let cnn = Connection::new_session().expect("Failed to open connection to session message bus");
     let path = "/org/mpris/MediaPlayer2";
     let dest = "org.mpris.MediaPlayer2.playerctld";
@@ -76,36 +49,14 @@ pub fn dbus_media_control(method: PlayerControl) {
     let message = Message::new_method_call(dest, path, name, method.to_string())
         .expect("Failed to create message");
     let reply = cnn
-        .send_with_reply_and_block(message, Duration::from_millis(5000))
+        .send_with_reply_and_block(message, std::time::Duration::from_millis(5000))
         .expect("Failed to send message and receive reply");
     if reply.get_items().is_empty() {
-        info!("Dbus {name} received empty reply");
+        log::info!("Dbus {name} received empty reply");
     }
 }
-
-fn _dbus_get_players() -> Vec<String> {
-    let cnn = Connection::new_session().expect("Fail to open dbus connection");
-    let path = "/org/freedesktop/DBus";
-    let dest = "org.freedesktop.DBus";
-    let method = "ListNames";
-    let msg = Message::new_method_call(dest, path, "org.freedesktop.DBus", method)
-        .expect("Failed to create message");
-    let reply = cnn
-        .send_with_reply_and_block(msg, Duration::from_millis(5000))
-        .expect("Failed to send message and receive reply");
-    let items = reply.get_items();
-    let mut res = Vec::new();
-    if let Some(MessageItem::Array(array)) = items.first() {
-        array.iter().for_each(|item| {
-            if let MessageItem::Str(val) = item {
-                if val.contains("org.mp") {
-                    res.push(val.to_string());
-                }
-            }
-        });
-    }
-    res
-}
+#[cfg(target_os = "windows")]
+pub fn media_control(method: PlayerControl) {}
 
 pub fn udp_server_loop_data<const T: usize>(
     addr: &str,
@@ -121,7 +72,7 @@ pub fn udp_server_loop_data<const T: usize>(
             .recv_from(&mut buffer)
             .expect("Failed to receive data");
         let message = String::from_utf8_lossy(&buffer[..nbytes]);
-        debug!("Received: {} from {}", message, client);
+        log::debug!("Received: {} from {}", message, client);
         func(message, client);
     }
 }
