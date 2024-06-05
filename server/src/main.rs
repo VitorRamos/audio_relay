@@ -34,8 +34,7 @@ fn main() {
         net::{Ipv4Addr, SocketAddr, UdpSocket},
         sync::{Arc, Mutex},
     };
-
-    std::env::set_var("RUST_LOG", "info");
+    unsafe { std::env::set_var("RUST_LOG", "info") };
     env_logger::init();
     let args = Args::parse();
     args.with_aptx.then(|| info!("APTX enabled"));
